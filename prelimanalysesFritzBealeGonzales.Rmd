@@ -1,0 +1,121 @@
+---
+title: "preliminary_mlm_Beale_Fritz_Gonzales"
+author: "Hannah Fritz, Cassin Gonzales, Lexy Beale"
+date: "11/5/2021"
+output:
+  html_document: default
+  pdf_document: default
+  github_document:
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here) 
+library(tidyverse)
+library(haven)
+library(lme4)
+library(lattice)
+library(sjPlot)
+library(MuMIn)
+library(r2mlm)
+library(broom.mixed)
+library(modelsummary)
+theme_set(theme_bw())
+theme_set(theme_bw())
+library(lmerTest)
+library(glmmTMB)
+library(interactions)
+```
+##Prospectus
+
+#### Research Question 
+How does maltreatment status and number of children in the home impact the progression of reactive, proactive, and total aggression symptoms across time? 
+
+#### Background
+Prior research has linked childhood maltreatment to aggressive behaviors. However, the factors that influence how these aggressive behaviors escalate over time during this key developmental period are largely unknown. In particular, total aggression and its subtypes have yet to be studied in this context. The proposed study will examine the progression pathways in the association between each of these three measures of aggression (total [reactive + proactive], reactive, and proactive aggression) predicted by maltreatment status and number of children in the home.
+
+A child’s home environment is a central location during childhood development. The home is largely where a child will eat meals, socialize with family members, complete their homework, develop emotionally, and sleep. It is known that overcrowded housing or having a high number of children in the home has a negative impact on childhood wellbeing. Children that have experienced a history of maltreatment may be particularly vulnerable to the impacts of these stressors from the home.
+
+We hypothesize that two child factors, history of maltreatment and number of children in the home environment, will influence the progression of reactive, proactive, and total aggression symptoms over time. We hypothesize that each of these factors will influence progression of symptoms individually and in combination. 
+
+#### Design and Structure
+The data for this project are from T2-T4 of an ongoing longitudinal study on the impacts of childhood maltreatment on development. The full data collection includes participants with Department of Child and Family Services (DCFS) documented child maltreatment cases and a demographically matched comparison sample.. The proposed study includes a T2 sample size of n=250 (51.6% female, Mage=10.32, SDage=1.27), T3 n=196 (53.4%female, Mage=13.55, SDage=1.34), and T4 n=224 (53.5% female, Mage=18.26, SDage=1.37). Number of children in the home (nchildren; continuous) was assessed by asking parents at enrollment in the study to report the number of children living in the home in addition to the child enrolled in the study. Maltreatment status (group) is a binary variable (0 = comparison, 1 = maltreatment). Maltreatment status was assigned if, at enrollment in the study, the participant had a DCFS case report of any abuse or neglect experience (regardless of maltreatment type, severity, chronicity, or age of onset). Reactive aggression (re), proactive aggression (pro), and total aggression (tot) were assessed with the 23-item Reactive-Proactive Aggression Questionnaire (RPQ; Raine et al., 2006). 11 items of the RPQ contribute to a reactive aggression subscale (e.g., “I get angry or mad when others threaten me”) and 12 items contribute to a proactive aggression scale (e.g., “I use force to get money or things from others”). Participants rated each aggression item on a 0-2 scale (0=Never, 1=Sometimes, 2=Often). The aggression variables used in this study are sum scores (tot=sum of all 23 items, re=sum of all 11 reactive aggression items, pro=sum of all 12 proactive aggression items). 
+
+#### Data Analysis Plan
+We will use a multilevel model longitudinal data analysis with the three timepoints nested within an individual. We will run three separate models, one for each aggression score (reactive, proactive, total). For each model, each individual has one  aggression score (0-11) for each timepoint (excluding missing values).  We will also utilize two time invariant (level 2) predictors in each model, n children (continuous) and group  (binary). We will first conduct an attrition analysis by comparing the mean total aggression scores between those with complete (3 timepoints) data and those with 2 or less timepoints for total aggression (this only needs to be done for total aggression because all aggression measures come from the same scale). If there is a high mean difference between groups, we will create a plan for handling missing data. Next, we will convert data to long form so that there are 6 total columns: famid, re, pro, tot,  groupt, and n children.  We will not center any of the aggression scales because a score of 0 on the scale represents no reported aggression. 
+
+Next we will visualize and assess the linearity of the relationship between time period and reactive aggression score using a spaghetti plot.  If there appears to be a non-linear relationship, we will assess the time point in which the slope diverges and proceed with using a piecewise growth model (if so, replace “time” with “phase 1 + phase 2” for the remaining plan below).  We will then run the spaghetti plot for our other two models, proactive aggression and total aggression. Finally, we will run each model and include random slopes for time:
+re ~ time * nchildren * group + (time | famid)
+pro ~ time * nchildren * group + (time | famid)
+tot ~ time * nchildren * group + (time | famid)
+
+##### Logistics
+Presentation format
+The data analytic scripts and supplemental materials for this project will be available at https://github.com/abeale96/MLM-Project.git..
+
+## Preliminary Analyses for Reactive Aggression
+```{r Import the Data}
+cmdat <- read_sav(here("cmdatlong.sav"))
+cmdat
+```
+
+```{r}
+cmdat$group <- as.numeric(cmdat$group)
+cmdat$sex <- as.numeric(cmdat$sex)
+cmdat$caregiver <- as.numeric(cmdat$caregiver)
+cmdat$nchildren <- as.numeric(cmdat$nchildren)
+cmdat$time <- as.numeric(cmdat$time)
+cmdat$tot <- as.numeric(cmdat$tot)
+cmdat$re <- as.numeric(cmdat$re)
+cmdat$pro <- as.numeric(cmdat$pro)
+cmdat$seen <- as.numeric(cmdat$seen)
+```
+
+
+```{r}
+cmdat
+```
+
+
+
+Level 1:
+$$re_{ti}=\beta_{0i}+\beta_{1i}time_{ti}+\beta_{2i}nchildren_{ti}+\beta_{3i}group_{ti}+e_{ti}$$
+Level 2:
+$$\beta_{0i}=\gamma_{00}+u_{0i}$$
+$$\beta_{1i}=\gamma_{10}+u_{1i}$$
+
+$$\beta_{2i}=\gamma_{20}+u_{2i}$$
+$$\beta_{3i}=\gamma_{30}+u_{3i}$$
+
+```{r Reactive Aggression Model}
+mre <- glmmTMB(re ~ time * nchildren * group + (time | famid), data = cmdat, REML = TRUE)
+summary(mre) #summary
+msummary(mre) #Show output
+```
+
+
+```{r Plot the Interaction}
+interact_plot(mre,
+              pred = "nchildren",
+              modx = "group",
+              modx.values = c(0, 1),
+              modx.labels = c("comparison", "maltreated"),
+              plot.points = TRUE,
+              point.size = 0.5,
+              point.alpha = 0.2,
+              jitter = 0.02,
+              x.label = "Number of Children",
+              y.label = "Reactive Aggression")
+```
+#### Preliminary Reactive Aggression Analysis Interpretation
+To test our research question regarding reactive aggression, we ran a model testing how maltreatment status and number of children in the home impact of the progression of reactive aggression across time. Results showed that there were no main effects of time (β = .13, p = .78), number of children(β = -.14 ,p = .75) , and group(β= .71, p = .65). Additionally, none of our interactions were significant. 
+
+For the final project, we plan to continue testing our research questions regarding proactive and total aggression in a manner consistent with the above analytic plan.
+
+
+
