@@ -1,0 +1,186 @@
+---
+title: "preliminary_mlm_Beale_Fritz_Gonzales"
+author: "Hannah Fritz, Cassin Gonzales, Lexy Beale"
+date: "11/5/2021"
+output:
+  html_document: default
+  pdf_document: default
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here) 
+library(tidyverse)
+library(haven)
+library(lme4)
+library(lattice)
+library(sjPlot)
+library(MuMIn)
+library(r2mlm)
+library(broom.mixed)
+library(modelsummary)
+theme_set(theme_bw())
+theme_set(theme_bw())
+library(lmerTest)
+library(glmmTMB)
+library(interactions)
+```
+## Data Preparation
+```{r Import the Data}
+cmdat <- read_sav(here("cmdatlong.sav"))
+cmdat
+```
+
+```{r}
+cmdat$group <- as.numeric(cmdat$group)
+cmdat$sex <- as.numeric(cmdat$sex)
+cmdat$caregiver <- as.numeric(cmdat$caregiver)
+cmdat$nchildren <- as.numeric(cmdat$nchildren)
+cmdat$time <- as.numeric(cmdat$time)
+cmdat$tot <- as.numeric(cmdat$tot)
+cmdat$re <- as.numeric(cmdat$re)
+cmdat$pro <- as.numeric(cmdat$pro)
+cmdat$seen <- as.numeric(cmdat$seen)
+```
+
+
+## Model Equations
+
+### Reactive Aggression Equations
+Level 1:
+$$re_{ti}=\beta_{0i}+\beta_{1i}time_{ti}+\beta_{2i}nchildren_{ti}+\beta_{3i}group_{ti} + \beta_{4i}time_{ti} \times nchildren_{ti}$$ $$+ \beta_{5i} nchildren_{ti} \times group_{ti} + \beta_{6i} time_{ti} \times group_{ti} + \beta_{7i}time_{ti} \times nchildren_{ti} \times group_{ti} + \beta_{8i}miss_{ti} +e_{ti}$$
+
+Level 2:
+$$\beta_{0i}=\gamma_{00}+u_{0i}$$
+$$\beta_{1i}=\gamma_{10}+u_{1i}$$
+
+$$\beta_{2i}=\gamma_{20}+u_{2i}$$
+$$\beta_{3i}=\gamma_{30}+u_{3i}$$
+
+$$\beta_{4i}=\gamma_{40}+u_{4i}$$
+
+$$\beta_{5i}=\gamma_{50}+u_{5i}$$
+$$\beta_{6i}=\gamma_{60}+u_{6i}$$
+
+$$\beta_{7i}=\gamma_{70}+u_{7i}$$
+$$\beta_{8i}=\gamma_{80}+u_{8i}$$
+### Proactive Aggression Equations
+
+Level 1:
+$$pro_{ti}=\beta_{0i}+\beta_{1i}time_{ti}+\beta_{2i}nchildren_{ti}+\beta_{3i}group_{ti} + \beta_{4i}time_{ti} \times nchildren_{ti}$$ $$+ \beta_{5i} nchildren_{ti} \times group_{ti} + \beta_{6i} time_{ti} \times group_{ti} + \beta_{7i}time_{ti} \times nchildren_{ti} \times group_{ti} + \beta_{8i}miss_{ti} +e_{ti}$$
+
+Level 2:
+$$\beta_{0i}=\gamma_{00}+u_{0i}$$
+$$\beta_{1i}=\gamma_{10}+u_{1i}$$
+
+$$\beta_{2i}=\gamma_{20}+u_{2i}$$
+$$\beta_{3i}=\gamma_{30}+u_{3i}$$
+
+$$\beta_{4i}=\gamma_{40}+u_{4i}$$
+
+$$\beta_{5i}=\gamma_{50}+u_{5i}$$
+
+$$\beta_{6i}=\gamma_{60}+u_{6i}$$
+
+$$\beta_{7i}=\gamma_{70}+u_{7i}$$
+
+$$\beta_{8i}=\gamma_{80}+u_{8i}$$
+## Spaghetti Plots - Test of Linearity
+
+```{r re spaghetti}
+p1 <- ggplot(cmdat, aes(x = time, y = re)) + 
+  geom_point() + 
+  geom_line(aes(group = famid)) +  # add lines to connect the data for each person
+  # add a mean trajectory
+  stat_summary(fun = "mean", col = "red", size = 1, geom = "line")
+p1
+```
+
+```{r pro spaghetti}
+p2 <- ggplot(cmdat, aes(x = time, y = pro)) + 
+  geom_point() + 
+  geom_line(aes(group = famid)) +  # add lines to connect the data for each person
+  # add a mean trajectory
+  stat_summary(fun = "mean", col = "red", size = 1, geom = "line")
+p2
+```
+
+## Attrition Analysis
+
+```{r}
+cmdat <- cmdat %>%
+  # Compute summaries by rows
+  rowwise() %>%
+  # First compute the number of missing occasions
+  mutate(miss = sum(is.na(c_across(re:pro))),
+         # Complete only when nmis_read = 0
+         complete = if_else(miss == 0, "complete", "incomplete")) %>%
+  ungroup()
+# Compare the differences
+datasummary((pro + re) ~
+              complete * (Mean + SD), data = cmdat)
+```
+
+# Multilevel Models
+
+```{r Reactive Aggression Model}
+mre <- glmmTMB(re ~ time * nchildren * group + miss + (time | famid), data = cmdat, REML = TRUE)
+summary(mre) #summary
+msummary(mre) #Show output
+```
+
+```{r Proactive Aggression Model}
+mpro <- glmmTMB(pro ~ time * nchildren * group + miss + (time | famid), data = cmdat, REML = TRUE)
+summary(mpro) #summary
+msummary(mpro) #Show output
+```
+
+### Interclass Correlation
+
+```{r Reactive Aggression ICC}
+(vc_mre <- VarCorr(mre))  # shows the random effect SDs
+
+vc_mre[[1]]$famid[1, 1]  # intercept variance (tau_0^2)
+
+attr(vc_mre[[1]], "sc")^2  # lv-1 error variance (sigma^2)
+
+# ICC: tau_0^2 / (tau_0^2 + sigma^2)
+vc_mre[[1]]$famid[1, 1] / 
+  (vc_mre[[1]]$famid[1, 1] + attr(vc_mre[[1]], "sc")^2)
+```
+
+ICC reactive aggression = .61
+
+```{r Proactive Aggression ICC}
+(vc_mpro <- VarCorr(mpro))  # shows the random effect SDs
+
+vc_mpro[[1]]$famid[1, 1]  # intercept variance (tau_0^2)
+
+attr(vc_mpro[[1]], "sc")^2  # lv-1 error variance (sigma^2)
+
+# ICC: tau_0^2 / (tau_0^2 + sigma^2)
+vc_mpro[[1]]$famid[1, 1] / 
+  (vc_mpro[[1]]$famid[1, 1] + attr(vc_mpro[[1]], "sc")^2)
+```
+
+pro ICC: 0.7388889
+
+## Interaction Plots
+
+```{r Reactive Model Three Way Interaction Plot}
+# select only levels 0, 3 and 7 from continuous variable nchildren
+plot_model(mre, type = "pred", terms = c("time", "nchildren [0,3,7]", "group"))
+```
+
+```{r Proactive Model Three Way Interaction Plot}
+plot_model(mpro, type = "pred", terms = c("time", "nchildren [0,3,7]", "group"))
+```
+
+
+
+
